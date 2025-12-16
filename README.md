@@ -15,6 +15,25 @@
 
 <p>Unlike bloatware file managers that struggle with split binaries, Brokk parses, extracts, and streams installation data directly to the OS session using a clean, reactive architecture.</p>
 
+<h2>⚡ Screenshots</h2>
+<h3>Full Installer</h2>
+<table>
+  <tr>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/1.jpg" alt="Screenshot 1" width="200"/></td>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/2.jpg" alt="Screenshot 2" width="200"/></td>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/3.jpg" alt="Screenshot 3" width="200"/></td>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/4.jpg" alt="Screenshot 4" width="200"/></td>
+  </tr>
+</table>
+<h3>Poertable Installer</h2>
+<table>
+  <tr>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/5.jpg" alt="Screenshot 1" width="200"/></td>
+    <td><img src="fastlane/metadata/android/en-US/images/phoneScreenshots/6.jpg" alt="Screenshot 2" width="200"/></td>
+  </tr>
+</table>
+
+
 <h2>⚡ Features</h2>
 <ul>
 <li><strong>Universal Installer:</strong> Handles standard <code>.apk</code>, split <code>.apks</code>, and bundled <code>.xapk</code> (Zip-based) files.</li>
