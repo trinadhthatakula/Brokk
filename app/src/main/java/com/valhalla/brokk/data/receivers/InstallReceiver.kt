@@ -1,0 +1,63 @@
+package com.valhalla.brokk.data.receivers
+
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageInstaller
+import android.os.Build
+import android.util.Log
+import com.valhalla.brokk.data.ACTION_INSTALL_STATUS
+import com.valhalla.brokk.domain.BrokkEventBus
+import com.valhalla.brokk.domain.InstallState
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+
+/**
+ * Receives the async result from the Android System.
+ */
+class InstallReceiver : BroadcastReceiver(), KoinComponent {
+
+    private val eventBus: BrokkEventBus by inject()
+
+    override fun onReceive(context: Context, intent: Intent) {
+        Log.d("BrokkReceiver", "onReceive triggered. Action: ${intent.action}")
+
+        if (intent.action != ACTION_INSTALL_STATUS) return
+
+        val pendingResult = goAsync()
+        val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, -1)
+        val message = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE) ?: "No message"
+
+        Log.d("BrokkReceiver", "Status: $status, Message: $message")
+
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                when (status) {
+                    PackageInstaller.STATUS_SUCCESS -> {
+                        eventBus.emit(InstallState.Success)
+                    }
+                    PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                        val confirmIntent: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                        } else {
+                            intent.getParcelableExtra(Intent.EXTRA_INTENT)
+                        }
+                        if (confirmIntent != null) {
+                            eventBus.emit(InstallState.UserConfirmationRequired(confirmIntent))
+                        } else {
+                            eventBus.emit(InstallState.Error("System requested confirmation but provided no intent."))
+                        }
+                    }
+                    else -> {
+                        eventBus.emit(InstallState.Error("Install Failed ($status): $message"))
+                    }
+                }
+            } finally {
+                pendingResult.finish()
+            }
+        }
+    }
+}
