@@ -24,54 +24,48 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
 
         try {
             val contentResolver = context.contentResolver
-            val inputStream = contentResolver.openInputStream(uri)
-                ?: return@withContext Result.failure(Exception("Cannot open file stream"))
 
-            // 1. Extraction Phase
-            // We need to find the "base.apk" or the main APK to parse manifest info.
-            // If it's a single APK, we copy the whole thing.
-            // If it's a ZIP/XAPK, we hunt for "base.apk".
+            // Phase 1: Try to extract a nested APK (for XAPK/APKS)
+            // We open a fresh stream for the Zip check
+            var isNestedBundle = false
 
-            var foundApk = false
-
-            // Check magic bytes or extension to see if it's a ZIP-based format vs raw APK
-            // For simplicity, we try to open as Zip. If it fails, we treat as raw APK.
             try {
-                ZipInputStream(inputStream).use { zipStream ->
-                    var entry = zipStream.nextEntry
-                    while (entry != null) {
-                        val name = entry.name
-                        // In App Bundles/XAPK, the main manifest is usually in 'base.apk'
-                        // If not found, we take the first .apk we see as a fallback
-                        if (name.endsWith("base.apk", ignoreCase = true) ||
-                            (name.endsWith(".apk", ignoreCase = true))) {
-
-                            FileOutputStream(tempFile).use { fos ->
-                                zipStream.copyTo(fos)
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    ZipInputStream(inputStream).use { zipStream ->
+                        var entry = zipStream.nextEntry
+                        while (entry != null) {
+                            val name = entry.name
+                            // If we find a nested APK, we extract it and stop.
+                            // We prioritize 'base.apk' but accept any .apk if base isn't found first.
+                            if (name.endsWith(".apk", ignoreCase = true)) {
+                                FileOutputStream(tempFile).use { fos ->
+                                    zipStream.copyTo(fos)
+                                }
+                                isNestedBundle = true
+                                break
                             }
-                            foundApk = true
-                            break // We only need one APK to get the icon/label
+                            zipStream.closeEntry()
+                            entry = zipStream.nextEntry
                         }
-                        zipStream.closeEntry()
-                        entry = zipStream.nextEntry
                     }
                 }
-            } catch (_: Exception) {
-                // Not a zip? Maybe it's a raw APK file.
-                // Reset stream
-                contentResolver.openInputStream(uri)?.use { rawInput ->
-                    FileOutputStream(tempFile).use { fos ->
-                        rawInput.copyTo(fos)
+            } catch (e: Exception) {
+                // Not a zip or read error, proceed to fallback
+                isNestedBundle = false
+            }
+
+            // Phase 2: Fallback (Standard APK)
+            // If we didn't find any nested APKs inside, the file ITSELF is the APK.
+            if (!isNestedBundle) {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
                     }
-                    foundApk = true
                 }
             }
 
-            if (!foundApk) {
-                return@withContext Result.failure(Exception("No valid APK found for analysis"))
-            }
-
-            // 2. Parsing Phase
+            // Phase 3: Parsing
+            // Now tempFile is either the extracted base.apk OR the copy of the original APK.
             val pm = context.packageManager
             val flags = PackageManager.GET_META_DATA
 
@@ -83,14 +77,14 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
             }
 
             if (archiveInfo == null) {
-                return@withContext Result.failure(Exception("Failed to parse APK manifest"))
+                return@withContext Result.failure(Exception("Failed to parse APK manifest. The file might be corrupted or encrypted."))
             }
 
             // Necessary to load resources properly from an external file
             archiveInfo.applicationInfo?.sourceDir = tempFile.absolutePath
             archiveInfo.applicationInfo?.publicSourceDir = tempFile.absolutePath
 
-            val label = archiveInfo.applicationInfo?.loadLabel(pm)?.toString() ?: "Unknown"
+            val label = archiveInfo.applicationInfo?.loadLabel(pm).toString()
             val drawable = archiveInfo.applicationInfo?.loadIcon(pm)
             val version = archiveInfo.versionName ?: "Unknown"
             val pkgName = archiveInfo.packageName
@@ -107,7 +101,7 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
-            // 3. Cleanup
+            // Cleanup: Delete the temp file to save space
             if (tempFile.exists()) {
                 tempFile.delete()
             }

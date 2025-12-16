@@ -1,0 +1,21 @@
+Stop struggling with "App Not Installed" errors. Brokk is the ruthless, no-nonsense utility designed to handle the complex, fragmented reality of modern Android app distribution.
+
+While standard file managers fail to recognize split binaries, Brokk parses, extracts, and streams installation data directly to the system session. It bridges the gap between modern formats (.xapk, .apks) and your device, all without requiring Root access.
+
+⚡ Industrial-Grade Features:
+
+    Universal Assembly: Seamlessly installs standard .apk, split .apks, and zipped .xapk bundles.
+
+    Portable Mode: Don't leave your flow. Brokk floats over your browser or file manager as a bottom sheet, allowing you to review and install apps without context switching.
+
+    Pre-Install Intelligence: Never install blindly. Brokk parses the package stream to display the App Icon, Version, and Label before you commit.
+
+    Smart Context: Automatically detects if you are updating an existing app or installing a new one.
+
+    Rootless Architecture: Built entirely on standard Android APIs. Secure, safe, and clean.
+
+    Material You: A UI that adapts to your device, built with Jetpack Compose.
+
+🛠 Forged with Modern Tech: Brokk is Open Source and built with a strictly clean architecture using Kotlin, Koin, and Coroutines. No bloat, no ads, just utility.
+
+Part of the Valhalla Suite.
