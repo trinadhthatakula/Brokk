@@ -1,3 +1,7 @@
+<p >
+  <img src="app/src/main/launch-playstore.png" alt="Thor Logo" height="192dp">
+</p>
+
 <h1>Brokk - The Assembler</h1>
 
 <div class="badges">
