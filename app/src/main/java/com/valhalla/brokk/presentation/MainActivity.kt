@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import com.valhalla.brokk.app.App
 import com.valhalla.brokk.presentation.installer.BrokkInstallerScreen
 import com.valhalla.brokk.presentation.theme.BrokkTheme
 
@@ -12,8 +13,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            BrokkTheme {
-                BrokkInstallerScreen()
+            App{
+                finishAffinity()
             }
         }
     }
