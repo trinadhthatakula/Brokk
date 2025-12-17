@@ -36,7 +36,12 @@ class InstallReceiver : BroadcastReceiver(), KoinComponent {
                         eventBus.emit(InstallState.Success)
                     }
                     PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                        val confirmIntent = intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                        val confirmIntent: Intent? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT, Intent::class.java)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            intent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                        }
                         if (confirmIntent != null) {
                             eventBus.emit(InstallState.UserConfirmationRequired(confirmIntent))
                         }
