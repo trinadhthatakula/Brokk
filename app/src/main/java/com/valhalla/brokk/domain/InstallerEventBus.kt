@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * * Since BroadcastReceivers are instantiated by the OS, we cannot scope them to the ViewModel.
  * This Bus acts as the synapse.
  */
-class BrokkEventBus {
+class InstallerEventBus {
     private val _events = MutableSharedFlow<InstallState>(replay = 1)
     val events = _events.asSharedFlow()
 

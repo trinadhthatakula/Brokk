@@ -11,7 +11,7 @@ import android.provider.OpenableColumns
 import android.util.Log
 import com.valhalla.brokk.data.ACTION_INSTALL_STATUS
 import com.valhalla.brokk.data.receivers.InstallReceiver
-import com.valhalla.brokk.domain.BrokkEventBus
+import com.valhalla.brokk.domain.InstallerEventBus
 import com.valhalla.brokk.domain.InstallState
 import com.valhalla.brokk.domain.repository.InstallerRepository
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +25,7 @@ import java.util.zip.ZipInputStream
 
 class InstallerRepositoryImpl(
     private val context: Context,
-    private val eventBus: BrokkEventBus
+    private val eventBus: InstallerEventBus
 ) : InstallerRepository {
 
     private val packageInstaller = context.packageManager.packageInstaller

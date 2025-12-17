@@ -5,9 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.os.Build
-import android.util.Log
 import com.valhalla.brokk.data.ACTION_INSTALL_STATUS
-import com.valhalla.brokk.domain.BrokkEventBus
+import com.valhalla.brokk.domain.InstallerEventBus
 import com.valhalla.brokk.domain.InstallState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -21,7 +20,7 @@ import org.koin.core.component.inject
  */
 class InstallReceiver : BroadcastReceiver(), KoinComponent {
 
-    private val eventBus: BrokkEventBus by inject()
+    private val eventBus: InstallerEventBus by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != ACTION_INSTALL_STATUS) return

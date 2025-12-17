@@ -50,7 +50,7 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun BrokkInstallerScreen(
-    viewModel: BrokkViewModel = koinViewModel()
+    viewModel: InstallerViewModel = koinViewModel()
 ) {
     val state by viewModel.installState.collectAsState(initial = InstallState.Idle)
     val context = LocalContext.current
@@ -327,7 +327,7 @@ fun BrokkInstallerScreen(
 }
 
 @Composable
-fun IdleView(viewModel: BrokkViewModel) {
+fun IdleView(viewModel: InstallerViewModel) {
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->

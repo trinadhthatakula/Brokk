@@ -68,7 +68,7 @@ class PortableInstallerActivity : ComponentActivity() {
 @Composable
 fun PortableInstallerScreen(
     onDismiss: () -> Unit,
-    viewModel: BrokkViewModel = koinViewModel()
+    viewModel: InstallerViewModel = koinViewModel()
 ) {
     val state by viewModel.installState.collectAsState(initial = InstallState.Idle)
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
