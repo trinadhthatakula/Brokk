@@ -1,22 +1,27 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.room)
+    alias(libs.plugins.ksp)
 }
 
 kotlin {
     compilerOptions {
         jvmTarget.set(JvmTarget.JVM_21)
-        languageVersion.set(KotlinVersion.KOTLIN_2_3)
         optIn.add("kotlin.RequiresOptIn")
         optIn.add("kotlin.time.ExperimentalTime")
         optIn.add("kotlin.uuid.ExperimentalUuidApi")
         optIn.add("androidx.compose.material3.ExperimentalMaterial3ExpressiveApi")
         optIn.add("androidx.compose.material3.ExperimentalMaterial3Api")
     }
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 android {
@@ -52,6 +57,11 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    configurations.all {
+        exclude(group = "com.intellij", module = "annotations")
     }
 }
 
@@ -79,10 +89,10 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
     ///AndroidX Lifecycle
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.bundles.lifecycle)
+
+    ///Navigation
+    implementation(libs.bundles.navigation)
 
     ///Kotlinx
     implementation(libs.kotlinx.datetime)
@@ -90,4 +100,9 @@ dependencies {
 
     ///Koin for Android
     implementation(libs.bundles.koin)
+
+    ///Room DB
+    implementation(libs.bundles.room)
+    ksp(libs.room.compiler)
+
 }
