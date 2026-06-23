@@ -2,6 +2,7 @@ package com.valhalla.brokk.presentation.history
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.valhalla.brokk.domain.model.HistoryRecord
 import com.valhalla.brokk.domain.repository.HistoryRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -22,6 +23,12 @@ class HistoryViewModel(
     fun clearHistory() {
         viewModelScope.launch {
             historyRepository.clearHistory()
+        }
+    }
+
+    fun deleteRecord(record: HistoryRecord) {
+        viewModelScope.launch {
+            historyRepository.deleteRecord(record.id)
         }
     }
 }

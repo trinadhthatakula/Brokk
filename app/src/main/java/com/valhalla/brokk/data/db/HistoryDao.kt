@@ -16,4 +16,7 @@ interface HistoryDao {
 
     @Query("DELETE FROM installation_history")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM installation_history WHERE id = :id")
+    suspend fun deleteById(id: Long)
 }

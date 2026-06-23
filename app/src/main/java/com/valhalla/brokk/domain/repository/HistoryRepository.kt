@@ -7,4 +7,5 @@ interface HistoryRepository {
     fun getHistory(): Flow<List<HistoryRecord>>
     suspend fun addRecord(record: HistoryRecord)
     suspend fun clearHistory()
+    suspend fun deleteRecord(id: Long)
 }

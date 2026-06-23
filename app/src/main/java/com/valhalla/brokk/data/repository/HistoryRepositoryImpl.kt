@@ -27,4 +27,8 @@ class HistoryRepositoryImpl(
     override suspend fun clearHistory() = withContext(Dispatchers.IO) {
         db.historyDao().deleteAll()
     }
+
+    override suspend fun deleteRecord(id: Long) = withContext(Dispatchers.IO) {
+        db.historyDao().deleteById(id)
+    }
 }
