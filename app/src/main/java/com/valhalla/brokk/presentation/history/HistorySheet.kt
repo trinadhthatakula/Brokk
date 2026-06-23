@@ -37,7 +37,13 @@ fun HistorySheet(
     onDismiss: () -> Unit
 ) {
     val history by viewModel.historyState.collectAsState()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    val sheetState = rememberBottomSheetState(
+        SheetValue.Hidden,
+        setOf(
+            SheetValue.Hidden,
+            SheetValue.Expanded
+        )
+    )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,

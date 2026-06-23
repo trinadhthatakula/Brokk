@@ -26,14 +26,12 @@ room {
 
 android {
     namespace = "com.valhalla.brokk"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk  = libs.versions.compileSdk.get().toInt()
 
     defaultConfig {
         applicationId = "com.valhalla.brokk"
-        minSdk = 26
-        targetSdk = 36
+        minSdk = libs.versions.minSdk.get().toInt()
+        targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
 

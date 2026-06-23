@@ -22,8 +22,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +53,13 @@ fun PortableInstaller(
     viewModel: InstallerViewModel = koinViewModel()
 ) {
     val state by viewModel.installState.collectAsState(initial = InstallState.Idle)
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberBottomSheetState(
+        SheetValue.Hidden,
+        setOf(
+            SheetValue.Hidden,
+            SheetValue.Expanded
+        )
+    )
     val context = LocalContext.current
 
     // Auto-start installation process if intent is present
