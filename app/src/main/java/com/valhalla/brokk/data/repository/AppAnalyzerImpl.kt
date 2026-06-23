@@ -3,7 +3,6 @@ package com.valhalla.brokk.data.repository
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
@@ -14,30 +13,10 @@ import com.valhalla.brokk.domain.model.AppMetadata
 import com.valhalla.brokk.domain.repository.AppAnalyzer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.SerialName
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 import androidx.core.graphics.createBitmap
-
-private val json = Json { ignoreUnknownKeys = true }
-
-@Serializable
-private data class XapkManifest(
-    @SerialName("package_name") val packageName: String,
-    val name: String,
-    @SerialName("version_name") val versionName: String,
-    @SerialName("version_code") val versionCode: String,
-    val expansions: List<XapkExpansion>? = null
-)
-
-@Serializable
-private data class XapkExpansion(
-    val file: String,
-    @SerialName("install_path") val installPath: String
-)
 
 class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
 
@@ -45,72 +24,35 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
         val tempFile = File(context.cacheDir, "analysis_${System.currentTimeMillis()}.apk")
         val contentResolver = context.contentResolver
 
-        var manifestString: String? = null
-        var iconBytes: ByteArray? = null
         val obbList = mutableListOf<String>()
+        val abis = mutableSetOf<String>()
+        var isZip = false
 
         try {
-            // Step 1: Scan ZIP content for manifest.json, icon.png, and OBB files
+            // Step 1: Scan ZIP content for OBB files, native ABIs, and locate the base APK
+            var hasBaseApk = false
             try {
                 contentResolver.openInputStream(uri)?.use { inputStream ->
                     ZipInputStream(inputStream).use { zipStream ->
                         var entry = zipStream.nextEntry
                         while (entry != null) {
+                            isZip = true
                             val name = entry.name
-                            if (name == "manifest.json") {
-                                manifestString = zipStream.bufferedReader().readText()
-                            } else if (name.equals("icon.png", ignoreCase = true) || name.equals("logo.png", ignoreCase = true)) {
-                                iconBytes = zipStream.readBytes()
-                            } else if (name.endsWith(".obb", ignoreCase = true)) {
+                            if (name.endsWith(".obb", ignoreCase = true)) {
                                 obbList.add(name)
-                            }
-                            zipStream.closeEntry()
-                            entry = zipStream.nextEntry
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                Log.d("BrokkAnalyzer", "Error scanning zip entries or file is not a zip: ${e.message}")
-            }
-
-            // Step 2: If we found manifest.json, parse it and build AppMetadata
-            if (!manifestString.isNullOrEmpty()) {
-                try {
-                    val manifest = json.decodeFromString<XapkManifest>(manifestString!!)
-                    val iconBitmap = iconBytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-                    
-                    // Check if expansions are explicitly listed in manifest, otherwise use scanned OBBs
-                    val expansionsList = manifest.expansions?.map { it.file } ?: obbList
-                    
-                    return@withContext Result.success(
-                        AppMetadata(
-                            label = manifest.name,
-                            packageName = manifest.packageName,
-                            version = manifest.versionName,
-                            icon = iconBitmap,
-                            hasObb = expansionsList.isNotEmpty(),
-                            obbFiles = expansionsList
-                        )
-                    )
-                } catch (e: Exception) {
-                    Log.e("BrokkAnalyzer", "Failed to parse XAPK manifest.json, falling back to APK analysis", e)
-                }
-            }
-
-            // Step 3: Fallback logic - Extract the base/first APK inside ZIP or treat stream as APK
-            var isNestedBundle = false
-            try {
-                contentResolver.openInputStream(uri)?.use { inputStream ->
-                    ZipInputStream(inputStream).use { zipStream ->
-                        var entry = zipStream.nextEntry
-                        while (entry != null) {
-                            val name = entry.name
-                            if (name.endsWith(".apk", ignoreCase = true)) {
-                                FileOutputStream(tempFile).use { fos ->
-                                    zipStream.copyTo(fos)
+                            } else if (name.startsWith("lib/")) {
+                                val parts = name.split('/')
+                                if (parts.size > 2) {
+                                    abis.add(parts[1])
                                 }
-                                isNestedBundle = true
-                                break
+                            } else if (name.endsWith(".apk", ignoreCase = true)) {
+                                // Extract the first APK (or prioritizing base.apk) for metadata extraction
+                                if (!hasBaseApk || name.contains("base.apk", ignoreCase = true)) {
+                                    FileOutputStream(tempFile).use { fos ->
+                                        zipStream.copyTo(fos)
+                                    }
+                                    hasBaseApk = true
+                                }
                             }
                             zipStream.closeEntry()
                             entry = zipStream.nextEntry
@@ -118,20 +60,49 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                     }
                 }
             } catch (e: Exception) {
-                isNestedBundle = false
+                Log.d("BrokkAnalyzer", "Error scanning zip entries: ${e.message}")
             }
 
-            if (!isNestedBundle) {
+            // Step 2: Fallback (Standard standalone APK)
+            // If it's not a ZIP, or we didn't find any APK inside, treat the source file itself as the APK.
+            if (!isZip || !hasBaseApk) {
                 contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(tempFile).use { output ->
                         input.copyTo(output)
                     }
                 }
+
+                // If it is a standalone APK, it is also a ZIP archive. We can scan it for native ABIs.
+                try {
+                    tempFile.inputStream().use { fis ->
+                        ZipInputStream(fis).use { zipStream ->
+                            var entry = zipStream.nextEntry
+                            while (entry != null) {
+                                val name = entry.name
+                                if (name.startsWith("lib/")) {
+                                    val parts = name.split('/')
+                                    if (parts.size > 2) {
+                                        abis.add(parts[1])
+                                    }
+                                }
+                                zipStream.closeEntry()
+                                entry = zipStream.nextEntry
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
             }
 
-            // Step 4: Parse the APK file
+            // Step 3: Run package analysis on the extracted APK
             val pm = context.packageManager
-            val flags = PackageManager.GET_META_DATA
+            val flags = PackageManager.GET_META_DATA or
+                    PackageManager.GET_PERMISSIONS or
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        PackageManager.GET_SIGNING_CERTIFICATES
+                    } else {
+                        @Suppress("DEPRECATION")
+                        PackageManager.GET_SIGNATURES
+                    }
 
             val archiveInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.getPackageArchiveInfo(tempFile.absolutePath, PackageManager.PackageInfoFlags.of(flags.toLong()))
@@ -152,6 +123,38 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
             val version = archiveInfo.versionName ?: "Unknown"
             val pkgName = archiveInfo.packageName
 
+            // Extract SDK versions
+            val targetSdk = archiveInfo.applicationInfo?.targetSdkVersion ?: 0
+            val minSdk = if (Build.VERSION.SDK_INT >= 24) {
+                archiveInfo.applicationInfo?.minSdkVersion ?: 0
+            } else {
+                0
+            }
+
+            // Extract permissions
+            val permissionsList = archiveInfo.requestedPermissions?.toList() ?: emptyList()
+
+            // Extract signatures
+            val signaturesList = mutableListOf<String>()
+            try {
+                val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    archiveInfo.signingInfo?.apkContentsSigners
+                } else {
+                    @Suppress("DEPRECATION")
+                    archiveInfo.signatures
+                }
+
+                signatures?.forEach { signature ->
+                    val certBytes = signature.toByteArray()
+                    val md = java.security.MessageDigest.getInstance("SHA-256")
+                    val digest = md.digest(certBytes)
+                    val hexString = digest.joinToString(":") { "%02X".format(it) }
+                    signaturesList.add(hexString)
+                }
+            } catch (e: Exception) {
+                Log.e("BrokkAnalyzer", "Error reading signatures", e)
+            }
+
             Result.success(
                 AppMetadata(
                     label = label,
@@ -159,7 +162,12 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                     version = version,
                     icon = drawable?.toBitmap(),
                     hasObb = obbList.isNotEmpty(),
-                    obbFiles = obbList
+                    obbFiles = obbList,
+                    targetSdkVersion = targetSdk,
+                    minSdkVersion = minSdk,
+                    permissions = permissionsList,
+                    signatures = signaturesList,
+                    nativeAbis = abis.toList().sorted()
                 )
             )
 
