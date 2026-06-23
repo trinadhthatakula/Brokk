@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.valhalla.brokk.presentation.history.HistoryScreen
 import com.valhalla.brokk.presentation.installer.BrokkInstallerScreen
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -50,10 +51,10 @@ fun HomeScreen(
         Column(modifier
             .fillMaxSize()
             .padding(paddingValues)) {
-            if (state.selectedNavItem == HomeNavItem.INSTALLER) {
-                BrokkInstallerScreen()
-            } else {
-                Text("Work in progress")
+            when (state.selectedNavItem) {
+                HomeNavItem.INSTALLER -> BrokkInstallerScreen()
+                HomeNavItem.HISTORY -> HistoryScreen()
+                else -> Text("Work in progress")
             }
         }
     }
