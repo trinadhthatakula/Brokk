@@ -145,7 +145,7 @@ fun BrokkInstallerScreen(
             )
 
             Text(
-                text = "THE ASSEMBLER",
+                text = if (viewModel.isQueueActive) "QUEUE: ${viewModel.queueCurrentIndex} OF ${viewModel.queueTotalCount}" else "THE ASSEMBLER",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 modifier = Modifier.padding(bottom = 48.dp)
@@ -195,8 +195,11 @@ fun BrokkInstallerScreen(
                                 )
                             }
 
+                            SecurityInspector(meta = meta)
+
                             Button(
                                 onClick = { viewModel.confirmInstall() },
+                                modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = MaterialTheme.colorScheme.primary,
                                     contentColor = MaterialTheme.colorScheme.onPrimary
@@ -274,42 +277,65 @@ fun BrokkInstallerScreen(
                     }
 
                     is InstallState.Success -> {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
                             Text(
                                 "Installation Complete",
                                 style = MaterialTheme.typography.titleMedium,
                                 color = Color.Green,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(Modifier.height(16.dp))
 
-                            if (launchIntent != null) {
-                                Button(
-                                    onClick = {
-                                        launchIntent?.let {
-                                            it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                            context.startActivity(it)
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.primary,
-                                        contentColor = MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
-                                    Text("Open App")
-                                }
-                                Spacer(Modifier.height(8.dp))
-                            }
-
-                            Button(onClick = {
-                                val activity = context as? Activity
-                                if (activity?.intent?.action == Intent.ACTION_VIEW) {
-                                    activity.finish()
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
+                                if (hasNext) {
+                                    Button(
+                                        onClick = { viewModel.loadNextInQueue() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Next App")
+                                    }
                                 } else {
-                                    viewModel.resetState()
+                                    OutlinedButton(
+                                        onClick = {
+                                            if (viewModel.isQueueActive) viewModel.cancelQueue()
+                                            val activity = context as? Activity
+                                            if (activity?.intent?.action == Intent.ACTION_VIEW) {
+                                                activity.finish()
+                                            } else {
+                                                viewModel.resetState()
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Done")
+                                    }
                                 }
-                            }) {
-                                Text("Done")
+
+                                if (launchIntent != null) {
+                                    Button(
+                                        onClick = {
+                                            launchIntent?.let {
+                                                it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                context.startActivity(it)
+                                                val activity = context as? Activity
+                                                if (activity?.intent?.action == Intent.ACTION_VIEW) {
+                                                    activity.finish()
+                                                } else {
+                                                    viewModel.resetState()
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Open")
+                                    }
+                                }
                             }
                         }
                     }
@@ -409,18 +435,24 @@ fun BrokkInstallerScreen(
                                     Text("Open Files", fontSize = 11.sp)
                                 }
 
+                                val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
                                 Button(
                                     onClick = {
-                                        val activity = context as? Activity
-                                        if (activity?.intent?.action == Intent.ACTION_VIEW) {
-                                            activity.finish()
+                                        if (hasNext) {
+                                            viewModel.loadNextInQueue()
                                         } else {
-                                            viewModel.resetState()
+                                            if (viewModel.isQueueActive) viewModel.cancelQueue()
+                                            val activity = context as? Activity
+                                            if (activity?.intent?.action == Intent.ACTION_VIEW) {
+                                                activity.finish()
+                                            } else {
+                                                viewModel.resetState()
+                                            }
                                         }
                                     },
                                     modifier = Modifier.weight(1f)
                                 ) {
-                                    Text("Done")
+                                    Text(if (hasNext) "Next App" else "Done")
                                 }
                             }
                         }
@@ -429,6 +461,7 @@ fun BrokkInstallerScreen(
                     is InstallState.Error -> {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
                             Text(
                                 "Failed",
@@ -436,19 +469,42 @@ fun BrokkInstallerScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Bold
                             )
-                            Spacer(Modifier.height(8.dp))
                             Text(
                                 s.message,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
-                            Spacer(Modifier.height(16.dp))
-                            Button(
-                                onClick = { viewModel.resetState() },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Retry")
+                                val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
+                                if (viewModel.isQueueActive) {
+                                    OutlinedButton(
+                                        onClick = { viewModel.cancelQueue() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Cancel Queue")
+                                    }
+                                    if (hasNext) {
+                                        Button(
+                                            onClick = { viewModel.loadNextInQueue() },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Skip & Next")
+                                        }
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { viewModel.resetState() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("Retry")
+                                    }
+                                }
                             }
                         }
                     }
@@ -461,9 +517,15 @@ fun BrokkInstallerScreen(
 @Composable
 fun IdleView(viewModel: InstallerViewModel) {
     val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri?.let { viewModel.installFile(it) }
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            if (uris.size == 1) {
+                viewModel.installFile(uris.first())
+            } else {
+                viewModel.installMultipleFiles(uris)
+            }
+        }
     }
 
     Button(
@@ -481,6 +543,6 @@ fun IdleView(viewModel: InstallerViewModel) {
             contentColor = MaterialTheme.colorScheme.onPrimary
         )
     ) {
-        Text("Select File to Install")
+        Text("Select Files to Install")
     }
 }

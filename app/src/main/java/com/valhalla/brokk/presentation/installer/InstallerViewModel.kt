@@ -2,6 +2,9 @@ package com.valhalla.brokk.presentation.installer
 
 import android.content.pm.PackageManager
 import android.net.Uri
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.valhalla.brokk.domain.InstallerEventBus
@@ -28,6 +31,15 @@ class InstallerViewModel(
 
     var currentPackageName: String? = null
         private set
+
+    var isQueueActive by mutableStateOf(false)
+        private set
+    var queueCurrentIndex by mutableStateOf(0)
+        private set
+    var queueTotalCount by mutableStateOf(0)
+        private set
+
+    private val uriQueue = mutableListOf<Uri>()
 
     private var pendingUri: Uri? = null
     private var pendingMetadata: AppMetadata? = null
@@ -148,5 +160,45 @@ class InstallerViewModel(
             pendingUri = null
             currentPackageName = null
         }
+    }
+
+    fun installMultipleFiles(uris: List<Uri>) {
+        if (uris.isEmpty()) return
+        viewModelScope.launch {
+            uriQueue.clear()
+            uriQueue.addAll(uris)
+            queueTotalCount = uris.size
+            queueCurrentIndex = 1
+            isQueueActive = true
+            installFile(uriQueue.first())
+        }
+    }
+
+    fun loadNextInQueue() {
+        viewModelScope.launch {
+            if (queueCurrentIndex < queueTotalCount) {
+                val nextUri = uriQueue[queueCurrentIndex]
+                queueCurrentIndex++
+                installFile(nextUri)
+            } else {
+                resetQueue()
+            }
+        }
+    }
+
+    fun cancelQueue() {
+        uriQueue.clear()
+        queueCurrentIndex = 0
+        queueTotalCount = 0
+        isQueueActive = false
+        resetState()
+    }
+
+    private fun resetQueue() {
+        uriQueue.clear()
+        queueCurrentIndex = 0
+        queueTotalCount = 0
+        isQueueActive = false
+        resetState()
     }
 }

@@ -153,7 +153,7 @@ fun PortableInstaller(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "BROKK INSTALLER",
+                    text = if (viewModel.isQueueActive) "BROKK QUEUE (${viewModel.queueCurrentIndex}/${viewModel.queueTotalCount})" else "BROKK INSTALLER",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.Bold,
@@ -211,6 +211,9 @@ fun PortableInstaller(
                             )
                         }
                     }
+
+                    // Security & Details Inspector
+                    SecurityInspector(meta = meta)
 
                     Button(
                         onClick = { viewModel.confirmInstall() },
@@ -291,11 +294,24 @@ fun PortableInstaller(
                         Spacer(Modifier.height(16.dp))
 
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            OutlinedButton(
-                                onClick = onDismiss,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("Done")
+                            val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
+                            if (hasNext) {
+                                Button(
+                                    onClick = { viewModel.loadNextInQueue() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Next App")
+                                }
+                            } else {
+                                OutlinedButton(
+                                    onClick = {
+                                        if (viewModel.isQueueActive) viewModel.cancelQueue()
+                                        onDismiss()
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Done")
+                                }
                             }
 
                             if (launchIntent != null) {
@@ -410,11 +426,19 @@ fun PortableInstaller(
                                 Text("Open Files", fontSize = 11.sp)
                             }
 
+                            val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
                             Button(
-                                onClick = onDismiss,
+                                onClick = {
+                                    if (hasNext) {
+                                        viewModel.loadNextInQueue()
+                                    } else {
+                                        if (viewModel.isQueueActive) viewModel.cancelQueue()
+                                        onDismiss()
+                                    }
+                                },
                                 modifier = Modifier.weight(1f)
                             ) {
-                                Text("Done")
+                                Text(if (hasNext) "Next App" else "Done")
                             }
                         }
                     }
@@ -426,8 +450,37 @@ fun PortableInstaller(
                         color = MaterialTheme.colorScheme.error,
                         style = MaterialTheme.typography.bodyMedium
                     )
-                    Button(onClick = onDismiss) {
-                        Text("Close")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        val hasNext = viewModel.isQueueActive && viewModel.queueCurrentIndex < viewModel.queueTotalCount
+                        if (viewModel.isQueueActive) {
+                            OutlinedButton(
+                                onClick = {
+                                    viewModel.cancelQueue()
+                                    onDismiss()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Cancel Queue")
+                            }
+                            if (hasNext) {
+                                Button(
+                                    onClick = { viewModel.loadNextInQueue() },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Skip & Next")
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = onDismiss,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Close")
+                            }
+                        }
                     }
                 }
             }
