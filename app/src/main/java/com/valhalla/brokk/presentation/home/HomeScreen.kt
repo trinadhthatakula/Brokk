@@ -3,6 +3,7 @@ package com.valhalla.brokk.presentation.home
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -30,11 +31,14 @@ fun HomeScreen(
                             homeViewModel.selectNavItem(navItem)
                         },
                         icon = {
-
+                            Icon(
+                                navItem.getIcon(state.selectedNavItem == navItem),
+                                navItem.getTitle()
+                            )
                         },
                         label = {
                             Text(
-                               navItem.getTitle()
+                                navItem.getTitle()
                             )
                         }
                     )
@@ -43,10 +47,12 @@ fun HomeScreen(
             }
         }
     ) { paddingValues ->
-        Column(modifier.fillMaxSize().padding(paddingValues)) {
-            if(state.selectedNavItem == HomeNavItem.INSTALLER){
+        Column(modifier
+            .fillMaxSize()
+            .padding(paddingValues)) {
+            if (state.selectedNavItem == HomeNavItem.INSTALLER) {
                 BrokkInstallerScreen()
-            }else {
+            } else {
                 Text("Work in progress")
             }
         }

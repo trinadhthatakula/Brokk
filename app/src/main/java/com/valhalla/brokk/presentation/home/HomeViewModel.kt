@@ -1,5 +1,13 @@
 package com.valhalla.brokk.presentation.home
 
+import android.graphics.drawable.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.Share
 import androidx.lifecycle.ViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,6 +23,12 @@ enum class HomeNavItem{
             BIFROST -> "Share Apps"
         }
     }
+
+    fun getIcon(selected: Boolean  = false) = when(this){
+        INSTALLER -> if(selected) Icons.Default.Home else Icons.Outlined.Home
+        BIFROST -> if(selected) Icons.Default.Share else Icons.Outlined.Share
+    }
+
 }
 
 data class HomeState(
