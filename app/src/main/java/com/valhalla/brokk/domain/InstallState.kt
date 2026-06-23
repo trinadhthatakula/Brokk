@@ -13,7 +13,9 @@ sealed interface InstallState {
 
     data class ReadyToInstall(val meta: AppMetadata, val isUpdate: Boolean) : InstallState
     data class Installing(val progress: Float) : InstallState // 0.0 to 1.0
+    data class CopyingObb(val progress: Float) : InstallState // 0.0 to 1.0
     data object Success : InstallState
+    data class ObbExported(val packageName: String, val exportPath: String) : InstallState
     data class Error(val message: String) : InstallState
 
     // Critical: The OS has paused the session to ask the user for permission.

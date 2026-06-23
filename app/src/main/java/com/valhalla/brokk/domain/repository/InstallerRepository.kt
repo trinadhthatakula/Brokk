@@ -8,4 +8,10 @@ import android.net.Uri
  */
 interface InstallerRepository {
     suspend fun installPackage(uri: Uri)
+    suspend fun copyObb(
+        uri: Uri,
+        packageName: String,
+        obbEntries: List<String>,
+        onProgress: (Float) -> Unit
+    ): Result<Boolean>
 }
