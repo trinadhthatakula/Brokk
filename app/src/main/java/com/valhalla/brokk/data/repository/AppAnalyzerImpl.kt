@@ -3,40 +3,108 @@ package com.valhalla.brokk.data.repository
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
+import android.util.Log
 import com.valhalla.brokk.domain.model.AppMetadata
 import com.valhalla.brokk.domain.repository.AppAnalyzer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.SerialName
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
 import androidx.core.graphics.createBitmap
 
+private val json = Json { ignoreUnknownKeys = true }
+
+@Serializable
+private data class XapkManifest(
+    @SerialName("package_name") val packageName: String,
+    val name: String,
+    @SerialName("version_name") val versionName: String,
+    @SerialName("version_code") val versionCode: String,
+    val expansions: List<XapkExpansion>? = null
+)
+
+@Serializable
+private data class XapkExpansion(
+    val file: String,
+    @SerialName("install_path") val installPath: String
+)
+
 class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
 
     override suspend fun analyze(uri: Uri): Result<AppMetadata> = withContext(Dispatchers.IO) {
         val tempFile = File(context.cacheDir, "analysis_${System.currentTimeMillis()}.apk")
+        val contentResolver = context.contentResolver
+
+        var manifestString: String? = null
+        var iconBytes: ByteArray? = null
+        val obbList = mutableListOf<String>()
 
         try {
-            val contentResolver = context.contentResolver
-
-            // Phase 1: Try to extract a nested APK (for XAPK/APKS)
-            // We open a fresh stream for the Zip check
-            var isNestedBundle = false
-
+            // Step 1: Scan ZIP content for manifest.json, icon.png, and OBB files
             try {
                 contentResolver.openInputStream(uri)?.use { inputStream ->
                     ZipInputStream(inputStream).use { zipStream ->
                         var entry = zipStream.nextEntry
                         while (entry != null) {
                             val name = entry.name
-                            // If we find a nested APK, we extract it and stop.
-                            // We prioritize 'base.apk' but accept any .apk if base isn't found first.
+                            if (name == "manifest.json") {
+                                manifestString = zipStream.bufferedReader().readText()
+                            } else if (name.equals("icon.png", ignoreCase = true) || name.equals("logo.png", ignoreCase = true)) {
+                                iconBytes = zipStream.readBytes()
+                            } else if (name.endsWith(".obb", ignoreCase = true)) {
+                                obbList.add(name)
+                            }
+                            zipStream.closeEntry()
+                            entry = zipStream.nextEntry
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.d("BrokkAnalyzer", "Error scanning zip entries or file is not a zip: ${e.message}")
+            }
+
+            // Step 2: If we found manifest.json, parse it and build AppMetadata
+            if (!manifestString.isNullOrEmpty()) {
+                try {
+                    val manifest = json.decodeFromString<XapkManifest>(manifestString!!)
+                    val iconBitmap = iconBytes?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+                    
+                    // Check if expansions are explicitly listed in manifest, otherwise use scanned OBBs
+                    val expansionsList = manifest.expansions?.map { it.file } ?: obbList
+                    
+                    return@withContext Result.success(
+                        AppMetadata(
+                            label = manifest.name,
+                            packageName = manifest.packageName,
+                            version = manifest.versionName,
+                            icon = iconBitmap,
+                            hasObb = expansionsList.isNotEmpty(),
+                            obbFiles = expansionsList
+                        )
+                    )
+                } catch (e: Exception) {
+                    Log.e("BrokkAnalyzer", "Failed to parse XAPK manifest.json, falling back to APK analysis", e)
+                }
+            }
+
+            // Step 3: Fallback logic - Extract the base/first APK inside ZIP or treat stream as APK
+            var isNestedBundle = false
+            try {
+                contentResolver.openInputStream(uri)?.use { inputStream ->
+                    ZipInputStream(inputStream).use { zipStream ->
+                        var entry = zipStream.nextEntry
+                        while (entry != null) {
+                            val name = entry.name
                             if (name.endsWith(".apk", ignoreCase = true)) {
                                 FileOutputStream(tempFile).use { fos ->
                                     zipStream.copyTo(fos)
@@ -50,12 +118,9 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                     }
                 }
             } catch (e: Exception) {
-                // Not a zip or read error, proceed to fallback
                 isNestedBundle = false
             }
 
-            // Phase 2: Fallback (Standard APK)
-            // If we didn't find any nested APKs inside, the file ITSELF is the APK.
             if (!isNestedBundle) {
                 contentResolver.openInputStream(uri)?.use { input ->
                     FileOutputStream(tempFile).use { output ->
@@ -64,8 +129,7 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                 }
             }
 
-            // Phase 3: Parsing
-            // Now tempFile is either the extracted base.apk OR the copy of the original APK.
+            // Step 4: Parse the APK file
             val pm = context.packageManager
             val flags = PackageManager.GET_META_DATA
 
@@ -80,7 +144,6 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                 return@withContext Result.failure(Exception("Failed to parse APK manifest. The file might be corrupted or encrypted."))
             }
 
-            // Necessary to load resources properly from an external file
             archiveInfo.applicationInfo?.sourceDir = tempFile.absolutePath
             archiveInfo.applicationInfo?.publicSourceDir = tempFile.absolutePath
 
@@ -94,14 +157,15 @@ class AppAnalyzerImpl(private val context: Context) : AppAnalyzer {
                     label = label,
                     packageName = pkgName,
                     version = version,
-                    icon = drawable?.toBitmap()
+                    icon = drawable?.toBitmap(),
+                    hasObb = obbList.isNotEmpty(),
+                    obbFiles = obbList
                 )
             )
 
         } catch (e: Exception) {
             Result.failure(e)
         } finally {
-            // Cleanup: Delete the temp file to save space
             if (tempFile.exists()) {
                 tempFile.delete()
             }

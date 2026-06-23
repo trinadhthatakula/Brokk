@@ -22,6 +22,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.zip.ZipInputStream
+import android.os.Environment
 
 class InstallerRepositoryImpl(
     private val context: Context,
@@ -218,5 +219,110 @@ class InstallerRepositoryImpl(
             }
         }
         return size
+    }
+
+    override suspend fun copyObb(
+        uri: Uri,
+        packageName: String,
+        obbEntries: List<String>,
+        onProgress: (Float) -> Unit
+    ): Result<Boolean> = withContext(Dispatchers.IO) {
+        val totalBytes = getFileSize(uri)
+        var bytesProcessed = 0L
+        var lastProgressEmitted = 0
+
+        // Helper to track progress across stream
+        fun getTrackedStream(baseStream: InputStream): InputStream {
+            return object : InputStream() {
+                override fun read(): Int {
+                    val b = baseStream.read()
+                    if (b != -1) updateProgress(1)
+                    return b
+                }
+                override fun read(b: ByteArray, off: Int, len: Int): Int {
+                    val read = baseStream.read(b, off, len)
+                    if (read != -1) updateProgress(read.toLong())
+                    return read
+                }
+                override fun close() {
+                    baseStream.close()
+                }
+                private fun updateProgress(readBytes: Long) {
+                    bytesProcessed += readBytes
+                    if (totalBytes > 0) {
+                        val currentProgress = ((bytesProcessed.toDouble() / totalBytes) * 100).toInt()
+                        if (currentProgress > lastProgressEmitted) {
+                            lastProgressEmitted = currentProgress
+                            onProgress(bytesProcessed.toFloat() / totalBytes)
+                        }
+                    }
+                }
+            }
+        }
+
+        val primaryObbDir = File(context.obbDir.parentFile, packageName)
+        val fallbackObbDir = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "Brokk/$packageName"
+        )
+
+        suspend fun runCopy(destDir: File): Boolean {
+            if (!destDir.exists()) {
+                val created = destDir.mkdirs()
+                if (!created && !destDir.exists()) {
+                    throw java.io.IOException("Failed to create directory: ${destDir.absolutePath}")
+                }
+            }
+
+            val rawStream = context.contentResolver.openInputStream(uri) ?: throw java.io.IOException("Failed to open source stream")
+            val trackedStream = getTrackedStream(rawStream)
+
+            ZipInputStream(trackedStream).use { zipStream ->
+                var entry = zipStream.nextEntry
+                while (entry != null) {
+                    val name = entry.name
+                    if (obbEntries.contains(name) || (name.endsWith(".obb", ignoreCase = true) && !name.contains("__MACOSX"))) {
+                        val fileName = name.substringAfterLast('/')
+                        val destFile = File(destDir, fileName)
+                        FileOutputStream(destFile).use { fos ->
+                            zipStream.copyTo(fos)
+                        }
+                    }
+                    zipStream.closeEntry()
+                    entry = zipStream.nextEntry
+                }
+            }
+            return true
+        }
+
+        try {
+            Log.d("BrokkInstaller", "Attempting direct OBB copy to: ${primaryObbDir.absolutePath}")
+            runCopy(primaryObbDir)
+            Log.d("BrokkInstaller", "Direct OBB copy succeeded")
+            Result.success(true)
+        } catch (e: Exception) {
+            Log.w("BrokkInstaller", "Direct OBB copy failed: ${e.message}. Trying fallback export...", e)
+
+            // Clean up any partial files in primary directory
+            try {
+                if (primaryObbDir.exists()) {
+                    primaryObbDir.deleteRecursively()
+                }
+            } catch (_: Exception) {}
+
+            // Reset progress tracking
+            bytesProcessed = 0
+            lastProgressEmitted = 0
+
+            try {
+                Log.d("BrokkInstaller", "Attempting OBB fallback export to: ${fallbackObbDir.absolutePath}")
+                runCopy(fallbackObbDir)
+                Log.d("BrokkInstaller", "Fallback OBB export succeeded")
+                Result.success(false)
+            } catch (fallbackEx: Exception) {
+                Log.e("BrokkInstaller", "Fallback OBB export failed", fallbackEx)
+                Result.failure(fallbackEx)
+            }
+        }
     }
 }
