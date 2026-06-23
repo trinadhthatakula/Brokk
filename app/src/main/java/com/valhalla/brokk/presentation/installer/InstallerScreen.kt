@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -47,6 +49,9 @@ import androidx.compose.ui.unit.sp
 import com.valhalla.brokk.domain.InstallState
 import kotlinx.coroutines.delay
 import org.koin.androidx.compose.koinViewModel
+import android.net.Uri
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 @Composable
 fun BrokkInstallerScreen(
@@ -234,6 +239,21 @@ fun BrokkInstallerScreen(
                         }
                     }
 
+                    is InstallState.CopyingObb -> {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            val percentage = (s.progress * 100).toInt()
+
+                            LinearProgressIndicator(
+                                progress = { s.progress },
+                                modifier = Modifier.width(200.dp),
+                                color = MaterialTheme.colorScheme.secondary,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text("Extracting expansion (OBB) files: $percentage%", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+
                     is InstallState.UserConfirmationRequired -> {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
@@ -290,6 +310,118 @@ fun BrokkInstallerScreen(
                                 }
                             }) {
                                 Text("Done")
+                            }
+                        }
+                    }
+
+                    is InstallState.ObbExported -> {
+                        val clipboardManager = LocalClipboardManager.current
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "Installed (OBB Exported)",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Color.Green,
+                                fontWeight = FontWeight.Bold
+                            )
+
+                            Text(
+                                text = "Android restrictions prevent copying expansion files directly. They have been exported to your Downloads folder.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(
+                                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(12.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text(
+                                        text = "Action Required:",
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.error,
+                                        style = MaterialTheme.typography.labelMedium
+                                    )
+                                    Text(
+                                        text = "Copy folder:\n${s.exportPath}\n\nTo target:\nAndroid/obb/${s.packageName}/",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString(s.exportPath))
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Copy Src", fontSize = 11.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        clipboardManager.setText(AnnotatedString("Android/obb/${s.packageName}"))
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Copy Dst", fontSize = 11.sp)
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                OutlinedButton(
+                                    onClick = {
+                                        try {
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                setDataAndType(Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload"), "*/*")
+                                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                            }
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            try {
+                                                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                                                    type = "*/*"
+                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                }
+                                                context.startActivity(intent)
+                                            } catch (_: Exception) {}
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Open Files", fontSize = 11.sp)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        val activity = context as? Activity
+                                        if (activity?.intent?.action == Intent.ACTION_VIEW) {
+                                            activity.finish()
+                                        } else {
+                                            viewModel.resetState()
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Done")
+                                }
                             }
                         }
                     }

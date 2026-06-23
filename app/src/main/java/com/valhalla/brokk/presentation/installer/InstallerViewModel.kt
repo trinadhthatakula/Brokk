@@ -36,14 +36,51 @@ class InstallerViewModel(
     init {
         // Clear sticky state logic
         val lastState = eventBus.events.replayCache.firstOrNull()
-        if (lastState is InstallState.Success || lastState is InstallState.Error) {
+        if (lastState is InstallState.Success || lastState is InstallState.ObbExported || lastState is InstallState.Error) {
             viewModelScope.launch { eventBus.emit(InstallState.Idle) }
         }
 
-        // Listen for SUCCESS to save history
+        // Listen for SUCCESS to trigger OBB copying if present, and save history
         viewModelScope.launch {
             eventBus.events.collect { state ->
                 if (state is InstallState.Success) {
+                    val meta = pendingMetadata
+                    val uri = pendingUri
+                    if (meta != null && meta.hasObb && uri != null) {
+                        val packageName = meta.packageName
+                        val obbFiles = meta.obbFiles
+
+                        // Clear OBB flags so subsequent Success events don't trigger OBB copy again
+                        pendingMetadata = meta.copy(hasObb = false, obbFiles = emptyList())
+
+                        viewModelScope.launch {
+                            eventBus.emit(InstallState.CopyingObb(0.0f))
+                            val result = repository.copyObb(
+                                uri = uri,
+                                packageName = packageName,
+                                obbEntries = obbFiles,
+                                onProgress = { progress ->
+                                    viewModelScope.launch {
+                                        eventBus.emit(InstallState.CopyingObb(progress))
+                                    }
+                                }
+                            )
+
+                            result.onSuccess { directCopied ->
+                                if (directCopied) {
+                                    eventBus.emit(InstallState.Success)
+                                } else {
+                                    val fallbackPath = "Download/Brokk/$packageName"
+                                    eventBus.emit(InstallState.ObbExported(packageName, fallbackPath))
+                                }
+                            }.onFailure { error ->
+                                eventBus.emit(InstallState.Error("APK installed but OBB extraction failed: ${error.message}"))
+                            }
+                        }
+                    } else {
+                        saveHistoryRecord()
+                    }
+                } else if (state is InstallState.ObbExported) {
                     saveHistoryRecord()
                 }
             }
